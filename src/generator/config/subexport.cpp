@@ -466,6 +466,14 @@ void proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGr
             if(x.Mtu > 0)
                 singleproxy["mtu"] = x.Mtu;
             break;
+        case ProxyType::AnyTLS:
+            singleproxy["type"] = "anytls";
+            singleproxy["password"] = x.Password;
+            if(!x.ServerName.empty())
+                singleproxy["sni"] = x.ServerName;
+            if(!scv.is_undef())
+                singleproxy["skip-cert-verify"] = scv.get();
+            break;
         default:
             continue;
         }
@@ -836,6 +844,15 @@ std::string proxyToSurge(std::vector<Proxy> &nodes, const std::string &base_conf
             if(x.KeepAlive > 0)
                 ini.set(real_section, "keepalive", std::to_string(x.KeepAlive));
             ini.set(real_section, "peer", "(" + generatePeer(x) + ")");
+            break;
+        case ProxyType::AnyTLS:
+            if(surge_ver < 5)
+                continue;
+            proxy = "anytls, " + hostname + ", " + port + ", password=" + password;
+            if(!x.ServerName.empty())
+                proxy += ", sni=" + x.ServerName;
+            if(!scv.is_undef())
+                proxy += ", skip-cert-verify=" + scv.get_str();
             break;
         default:
             continue;

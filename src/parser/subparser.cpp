@@ -130,6 +130,14 @@ void wireguardConstruct(Proxy &node, const std::string &group, const std::string
     node.ClientId = clientId;
 }
 
+void anytlsConstruct(Proxy &node, const std::string &group, const std::string &remarks, const std::string &server, const std::string &port, const std::string &password, const std::string &sni, tribool udp, tribool tfo, tribool scv)
+{
+    commonConstruct(node, ProxyType::AnyTLS, group, remarks, server, port, udp, tfo, scv, tribool());
+    node.Password = password;
+    node.ServerName = sni;
+    node.TLSSecure = true;
+}
+
 void explodeVmess(std::string vmess, Proxy &node)
 {
     std::string version, ps, add, port, type, id, aid, net, path, host, tls, sni;
@@ -1190,6 +1198,13 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
 
             wireguardConstruct(node, group, ps, server, port, ip, ipv6, private_key, public_key, password, dns_server, mtu, "0", "", "", udp);
             break;
+        case "anytls"_hash:
+            group = ANYTLS_DEFAULT_GROUP;
+            singleproxy["password"] >>= password;
+            singleproxy["sni"] >>= sni;
+
+            anytlsConstruct(node, group, ps, server, port, password, sni, udp, tfo, scv);
+            break;
         default:
             continue;
         }
@@ -1792,6 +1807,43 @@ bool explodeSurge(std::string surge, std::vector<Proxy> &nodes)
 
             wireguardConstruct(node, WG_DEFAULT_GROUP, remarks, "", "0", ip, ipv6, private_key, "", "", dns_servers, mtu, keepalive, test_url, "", udp);
             parsePeers(node, peer);
+            break;
+        case "anytls"_hash: // surge 5 style anytls proxy
+            server = trim(configs[1]);
+            port = trim(configs[2]);
+            if(port == "0")
+                continue;
+
+            for(i = 3; i < configs.size(); i++)
+            {
+                vArray = split(configs[i], "=");
+                if(vArray.size() != 2)
+                    continue;
+                itemName = trim(vArray[0]);
+                itemVal = trim(vArray[1]);
+                switch(hash_(itemName))
+                {
+                case "password"_hash:
+                    password = itemVal;
+                    break;
+                case "sni"_hash:
+                    host = itemVal;
+                    break;
+                case "skip-cert-verify"_hash:
+                    scv = itemVal;
+                    break;
+                case "udp-relay"_hash:
+                    udp = itemVal;
+                    break;
+                case "tfo"_hash:
+                    tfo = itemVal;
+                    break;
+                default:
+                    continue;
+                }
+            }
+
+            anytlsConstruct(node, ANYTLS_DEFAULT_GROUP, remarks, server, port, password, host, udp, tfo, scv);
             break;
         default:
             switch(hash_(remarks))

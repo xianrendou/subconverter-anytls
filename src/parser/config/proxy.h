@@ -20,7 +20,8 @@ enum class ProxyType
     HTTP,
     HTTPS,
     SOCKS5,
-    WireGuard
+    WireGuard,
+    AnyTLS
 };
 
 inline String getProxyTypeName(ProxyType type)
@@ -43,6 +44,8 @@ inline String getProxyTypeName(ProxyType type)
         return "HTTPS";
     case ProxyType::SOCKS5:
         return "SOCKS5";
+    case ProxyType::AnyTLS:
+        return "AnyTLS";
     default:
         return "Unknown";
     }
@@ -109,5 +112,6 @@ struct Proxy
 #define TROJAN_DEFAULT_GROUP "TrojanProvider"
 #define SNELL_DEFAULT_GROUP "SnellProvider"
 #define WG_DEFAULT_GROUP "WireGuardProvider"
+#define ANYTLS_DEFAULT_GROUP "AnyTLSProvider"
 
 #endif // PROXY_H_INCLUDED

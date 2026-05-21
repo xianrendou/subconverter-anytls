@@ -1,0 +1,61 @@
+FROM alpine:3.16 AS builder
+ARG THREADS="4"
+
+WORKDIR /
+RUN set -xe && \
+    apk add --no-cache --virtual .build-tools git g++ build-base linux-headers cmake python3 && \
+    apk add --no-cache --virtual .build-deps curl-dev curl-static rapidjson-dev pcre2-dev pcre2-dev \
+        openssl-libs-static zlib-static nghttp2-static brotli-static && \
+    git clone https://github.com/jbeder/yaml-cpp --branch yaml-cpp-0.7.0 --depth=1 && \
+    cd yaml-cpp && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF \
+          -DBUILD_SHARED_LIBS=OFF . && \
+    make -j $THREADS && \
+    make install && \
+    cd .. && \
+    git clone https://github.com/ftk/quickjspp --depth=1 && \
+    cd quickjspp && \
+    git submodule update --init && \
+    cmake -DCMAKE_BUILD_TYPE=Release . && \
+    make quickjs -j $THREADS && \
+    install -d /usr/lib/quickjs/ && \
+    install -m644 quickjs/libquickjs.a /usr/lib/quickjs/ && \
+    install -d /usr/include/quickjs/ && \
+    install -m644 quickjs/quickjs.h quickjs/quickjs-libc.h /usr/include/quickjs/ && \
+    install -m644 quickjspp.hpp /usr/include && \
+    cd .. && \
+    git clone https://github.com/PerMalmberg/libcron --depth=1 && \
+    cd libcron && \
+    git submodule update --init && \
+    cmake -DCMAKE_BUILD_TYPE=Release . && \
+    make libcron -j $THREADS && \
+    install -m644 libcron/out/Release/liblibcron.a /usr/lib/ && \
+    install -d /usr/include/libcron/ && \
+    install -m644 libcron/include/libcron/* /usr/include/libcron/ && \
+    install -d /usr/include/date/ && \
+    install -m644 libcron/externals/date/include/date/* /usr/include/date/ && \
+    cd .. && \
+    git clone https://github.com/ToruNiina/toml11 --branch="v3.7.1" --depth=1 && \
+    cd toml11 && \
+    cmake -DCMAKE_CXX_STANDARD=11 . && \
+    make install -j $THREADS && \
+    cd ..
+
+COPY . /subconverter-anytls
+RUN cd /subconverter-anytls && \
+    echo 'target_link_libraries(subconverter ssl crypto nghttp2 brotlidec brotlicommon z)' >> CMakeLists.txt && \
+    cmake -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_EXE_LINKER_FLAGS="-static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive" \
+          -DCURL_LIBRARY=/usr/lib/libcurl.a \
+          -DCURL_INCLUDE_DIR=/usr/include \
+          -DPCRE2_LIBRARY=/usr/lib/libpcre2-8.a \
+          -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" . && \
+    make -j $THREADS
+
+FROM alpine:3.16
+RUN apk add --no-cache --virtual subconverter-deps pcre2 libcurl yaml-cpp
+COPY --from=builder /subconverter-anytls/subconverter /usr/bin/
+COPY --from=builder /subconverter-anytls/base /base/
+WORKDIR /base
+CMD subconverter
+EXPOSE 25500/tcp
