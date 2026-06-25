@@ -124,7 +124,9 @@ bool applyMatcher(const std::string &rule, std::string &real_rule, const Proxy &
                                                             {ProxyType::HTTP,         "HTTP"},
                                                             {ProxyType::HTTPS,        "HTTPS"},
                                                             {ProxyType::SOCKS5,       "SOCKS5"},
-                                                            {ProxyType::WireGuard,    "WIREGUARD"}};
+                                                            {ProxyType::WireGuard,    "WIREGUARD"},
+                                                            {ProxyType::AnyTLS,       "ANYTLS"},
+                                                            {ProxyType::Hysteria2,    "HYSTERIA2"}};
     if(startsWith(rule, "!!GROUP="))
     {
         regGetMatch(rule, group_regex, 3, 0, &target, &ret_real_rule);
@@ -256,8 +258,10 @@ void proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGr
         processRemark(x.Remark, remarks_list, false);
 
         tribool udp = ext.udp;
+        tribool tfo = ext.tfo;
         tribool scv = ext.skip_cert_verify;
         udp.define(x.UDP);
+        tfo.define(x.TCPFastOpen);
         scv.define(x.AllowInsecure);
 
         singleproxy["name"] = x.Remark;
@@ -471,6 +475,32 @@ void proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGr
             singleproxy["password"] = x.Password;
             if(!x.ServerName.empty())
                 singleproxy["sni"] = x.ServerName;
+            if(!x.ServerFingerprint.empty())
+                singleproxy["server-cert-fingerprint"] = x.ServerFingerprint;
+            if(!scv.is_undef())
+                singleproxy["skip-cert-verify"] = scv.get();
+            break;
+        case ProxyType::Hysteria2:
+            singleproxy["type"] = "hysteria2";
+            singleproxy["auth"] = x.Password;
+            if(!x.ServerName.empty())
+                singleproxy["sni"] = x.ServerName;
+            if(!x.OBFS.empty())
+                singleproxy["obfs"] = x.OBFS;
+            if(!x.OBFSParam.empty())
+                singleproxy["obfs-password"] = x.OBFSParam;
+            if(!x.UploadBandwidth.empty())
+                singleproxy["up-speed"] = to_int(x.UploadBandwidth);
+            if(!x.DownloadBandwidth.empty())
+                singleproxy["down-speed"] = to_int(x.DownloadBandwidth);
+            if(!x.PortHopping.empty())
+                singleproxy["ports"] = replaceAllDistinct(x.PortHopping, ";", ",");
+            if(!x.PortHoppingInterval.empty())
+                singleproxy["hop-interval"] = to_int(x.PortHoppingInterval);
+            if(!x.ServerFingerprint.empty())
+                singleproxy["server-cert-fingerprint"] = x.ServerFingerprint;
+            if(!tfo.is_undef())
+                singleproxy["fast-open"] = tfo.get();
             if(!scv.is_undef())
                 singleproxy["skip-cert-verify"] = scv.get();
             break;
@@ -846,11 +876,37 @@ std::string proxyToSurge(std::vector<Proxy> &nodes, const std::string &base_conf
             ini.set(real_section, "peer", "(" + generatePeer(x) + ")");
             break;
         case ProxyType::AnyTLS:
-            if(surge_ver < 5)
+            if(surge_ver < 5 && surge_ver != -3)
                 continue;
-            proxy = "anytls, " + hostname + ", " + port + ", password=" + password;
+            if(surge_ver == -3)
+                proxy = "anytls, " + hostname + ", " + port + ", " + password;
+            else
+                proxy = "anytls, " + hostname + ", " + port + ", password=" + password;
             if(!x.ServerName.empty())
                 proxy += ", sni=" + x.ServerName;
+            if(!x.ServerFingerprint.empty())
+                proxy += ", server-cert-fingerprint-sha256=" + x.ServerFingerprint;
+            if(!x.Reuse.is_undef())
+                proxy += ", reuse=" + x.Reuse.get_str();
+            if(!scv.is_undef())
+                proxy += ", skip-cert-verify=" + scv.get_str();
+            break;
+        case ProxyType::Hysteria2:
+            if(surge_ver < 5 && surge_ver != -3)
+                continue;
+            proxy = "hysteria2, " + hostname + ", " + port + ", password=" + password;
+            if(!x.DownloadBandwidth.empty())
+                proxy += ", download-bandwidth=" + x.DownloadBandwidth;
+            if(!x.PortHopping.empty())
+                proxy += ", port-hopping=" + replaceAllDistinct(x.PortHopping, ",", ";");
+            if(!x.PortHoppingInterval.empty())
+                proxy += ", port-hopping-interval=" + x.PortHoppingInterval;
+            if(!x.ServerName.empty())
+                proxy += ", sni=" + x.ServerName;
+            if(!x.ServerFingerprint.empty())
+                proxy += ", server-cert-fingerprint-sha256=" + x.ServerFingerprint;
+            if(!x.OBFSParam.empty())
+                proxy += ", salamander-password=" + x.OBFSParam;
             if(!scv.is_undef())
                 proxy += ", skip-cert-verify=" + scv.get_str();
             break;

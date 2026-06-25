@@ -144,6 +144,12 @@ namespace qjs
             JS_DefinePropertyValueStr(ctx, obj, "KeepAlive", JS_NewUint32(ctx, n.KeepAlive), JS_PROP_C_W_E);
             JS_DefinePropertyValueStr(ctx, obj, "TestUrl", JS_NewString(ctx, n.TestUrl), JS_PROP_C_W_E);
             JS_DefinePropertyValueStr(ctx, obj, "ClientId", JS_NewString(ctx, n.ClientId), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "UploadBandwidth", JS_NewString(ctx, n.UploadBandwidth), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "DownloadBandwidth", JS_NewString(ctx, n.DownloadBandwidth), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "PortHopping", JS_NewString(ctx, n.PortHopping), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "PortHoppingInterval", JS_NewString(ctx, n.PortHoppingInterval), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "ServerFingerprint", JS_NewString(ctx, n.ServerFingerprint), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "Reuse", js_traits<tribool>::wrap(ctx, n.Reuse), JS_PROP_C_W_E);
             return obj;
         }
 
@@ -199,6 +205,12 @@ namespace qjs
             node.KeepAlive = unwrap_free<uint32_t>(ctx, v, "KeepAlive");
             node.TestUrl = unwrap_free<std::string>(ctx, v, "TestUrl");
             node.ClientId = unwrap_free<std::string>(ctx, v, "ClientId");
+            node.UploadBandwidth = unwrap_free<std::string>(ctx, v, "UploadBandwidth");
+            node.DownloadBandwidth = unwrap_free<std::string>(ctx, v, "DownloadBandwidth");
+            node.PortHopping = unwrap_free<std::string>(ctx, v, "PortHopping");
+            node.PortHoppingInterval = unwrap_free<std::string>(ctx, v, "PortHoppingInterval");
+            node.ServerFingerprint = unwrap_free<std::string>(ctx, v, "ServerFingerprint");
+            node.Reuse = unwrap_free<tribool>(ctx, v, "Reuse");
             
             return node;
         }

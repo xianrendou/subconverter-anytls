@@ -138,6 +138,31 @@ void anytlsConstruct(Proxy &node, const std::string &group, const std::string &r
     node.TLSSecure = true;
 }
 
+void hysteria2Construct(Proxy &node, const std::string &group, const std::string &remarks, const std::string &server, const std::string &port, const std::string &password, const std::string &sni, const std::string &obfs, const std::string &obfsparam, const std::string &up, const std::string &down, const std::string &port_hopping, const std::string &port_hopping_interval, const std::string &fingerprint, tribool udp, tribool tfo, tribool scv)
+{
+    commonConstruct(node, ProxyType::Hysteria2, group, remarks, server, port, udp, tfo, scv, tribool());
+    node.Password = password;
+    node.ServerName = sni;
+    node.OBFS = obfs;
+    node.OBFSParam = obfsparam;
+    node.UploadBandwidth = up;
+    node.DownloadBandwidth = down;
+    node.PortHopping = port_hopping;
+    node.PortHoppingInterval = port_hopping_interval;
+    node.ServerFingerprint = fingerprint;
+    node.TLSSecure = true;
+}
+
+static bool parseKeyValue(const std::string &config, std::string &name, std::string &value)
+{
+    string_size eqpos = config.find('=');
+    if(eqpos == std::string::npos)
+        return false;
+    name = trim(config.substr(0, eqpos));
+    value = trimQuote(trim(config.substr(eqpos + 1)));
+    return true;
+}
+
 void explodeVmess(std::string vmess, Proxy &node)
 {
     std::string version, ps, add, port, type, id, aid, net, path, host, tls, sni;
@@ -984,9 +1009,10 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
     std::string proxytype, ps, server, port, cipher, group, password; //common
     std::string type = "none", id, aid = "0", net = "tcp", path, host, edge, tls, sni; //vmess
     std::string plugin, pluginopts, pluginopts_mode, pluginopts_host, pluginopts_mux; //ss
-    std::string protocol, protoparam, obfs, obfsparam; //ssr
+    std::string protocol, protoparam, obfs, obfsparam; //ssr, hysteria2
     std::string user; //socks
     std::string ip, ipv6, private_key, public_key, mtu; //wireguard
+    std::string up, down, port_hopping, port_hopping_interval, fingerprint; //hysteria2
     string_array dns_server;
     tribool udp, tfo, scv;
     Node singleproxy;
@@ -1003,6 +1029,7 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
         if(port.empty() || port == "0")
             continue;
         udp = safe_as<std::string>(singleproxy["udp"]);
+        tfo = safe_as<std::string>(singleproxy["fast-open"]);
         scv = safe_as<std::string>(singleproxy["skip-cert-verify"]);
         switch(hash_(proxytype))
         {
@@ -1200,10 +1227,45 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
             break;
         case "anytls"_hash:
             group = ANYTLS_DEFAULT_GROUP;
+            password.clear();
+            sni.clear();
+            fingerprint.clear();
             singleproxy["password"] >>= password;
             singleproxy["sni"] >>= sni;
+            singleproxy["server-cert-fingerprint"] >>= fingerprint;
 
             anytlsConstruct(node, group, ps, server, port, password, sni, udp, tfo, scv);
+            node.ServerFingerprint = fingerprint;
+            break;
+        case "hysteria2"_hash:
+        case "hy2"_hash:
+            group = HY2_DEFAULT_GROUP;
+            password.clear();
+            sni.clear();
+            obfs.clear();
+            obfsparam.clear();
+            up.clear();
+            down.clear();
+            port_hopping.clear();
+            port_hopping_interval.clear();
+            fingerprint.clear();
+            singleproxy["auth"] >>= password;
+            if(password.empty())
+                singleproxy["password"] >>= password;
+            singleproxy["sni"] >>= sni;
+            singleproxy["obfs"] >>= obfs;
+            singleproxy["obfs-password"] >>= obfsparam;
+            if(obfsparam.empty())
+                singleproxy["salamander-password"] >>= obfsparam;
+            singleproxy["up-speed"] >>= up;
+            singleproxy["down-speed"] >>= down;
+            singleproxy["ports"] >>= port_hopping;
+            singleproxy["hop-interval"] >>= port_hopping_interval;
+            singleproxy["server-cert-fingerprint"] >>= fingerprint;
+            if(fingerprint.empty())
+                singleproxy["server-cert-fingerprint-sha256"] >>= fingerprint;
+
+            hysteria2Construct(node, group, ps, server, port, password, sni, obfs, obfsparam, up, down, port_hopping, port_hopping_interval, fingerprint, udp, tfo, scv);
             break;
         default:
             continue;
@@ -1409,6 +1471,7 @@ bool explodeSurge(std::string surge, std::vector<Proxy> &nodes)
         std::string id, net, tls, host, edge, path; //v2
         std::string protocol, protoparam; //ssr
         std::string section, ip, ipv6, private_key, public_key, mtu, test_url, client_id, peer, keepalive; //wireguard
+        std::string obfs, obfsparam, up, down, port_hopping, port_hopping_interval, fingerprint, reuse; //hysteria2, anytls
         string_array dns_servers;
         string_multimap wireguard_config;
         std::string version, aead = "1";
@@ -1816,14 +1879,58 @@ bool explodeSurge(std::string surge, std::vector<Proxy> &nodes)
 
             for(i = 3; i < configs.size(); i++)
             {
-                vArray = split(configs[i], "=");
-                if(vArray.size() != 2)
+                if(!parseKeyValue(configs[i], itemName, itemVal))
                     continue;
-                itemName = trim(vArray[0]);
-                itemVal = trim(vArray[1]);
                 switch(hash_(itemName))
                 {
                 case "password"_hash:
+                    password = itemVal;
+                    break;
+                case "reuse"_hash:
+                    reuse = itemVal;
+                    break;
+                case "sni"_hash:
+                    host = itemVal;
+                    break;
+                case "skip-cert-verify"_hash:
+                    scv = itemVal;
+                    break;
+                case "server-cert-fingerprint"_hash:
+                case "server-cert-fingerprint-sha256"_hash:
+                    fingerprint = itemVal;
+                    break;
+                case "udp-relay"_hash:
+                    udp = itemVal;
+                    break;
+                case "tfo"_hash:
+                    tfo = itemVal;
+                    break;
+                default:
+                    continue;
+                }
+            }
+            if(password.empty() && configs.size() >= 4)
+                password = trimQuote(trim(configs[3]));
+
+            anytlsConstruct(node, ANYTLS_DEFAULT_GROUP, remarks, server, port, password, host, udp, tfo, scv);
+            node.ServerFingerprint = fingerprint;
+            node.Reuse = reuse;
+            break;
+        case "hysteria2"_hash:
+        case "hy2"_hash:
+            server = trim(configs[1]);
+            port = trim(configs[2]);
+            if(port == "0")
+                continue;
+
+            for(i = 3; i < configs.size(); i++)
+            {
+                if(!parseKeyValue(configs[i], itemName, itemVal))
+                    continue;
+                switch(hash_(itemName))
+                {
+                case "password"_hash:
+                case "auth"_hash:
                     password = itemVal;
                     break;
                 case "sni"_hash:
@@ -1836,14 +1943,45 @@ bool explodeSurge(std::string surge, std::vector<Proxy> &nodes)
                     udp = itemVal;
                     break;
                 case "tfo"_hash:
+                case "fast-open"_hash:
                     tfo = itemVal;
+                    break;
+                case "download-bandwidth"_hash:
+                case "down-speed"_hash:
+                    down = itemVal;
+                    break;
+                case "upload-bandwidth"_hash:
+                case "up-speed"_hash:
+                    up = itemVal;
+                    break;
+                case "port-hopping"_hash:
+                case "ports"_hash:
+                    port_hopping = itemVal;
+                    break;
+                case "port-hopping-interval"_hash:
+                case "hop-interval"_hash:
+                    port_hopping_interval = itemVal;
+                    break;
+                case "salamander-password"_hash:
+                    obfs = "salamander";
+                    obfsparam = itemVal;
+                    break;
+                case "obfs"_hash:
+                    obfs = itemVal;
+                    break;
+                case "obfs-password"_hash:
+                    obfsparam = itemVal;
+                    break;
+                case "server-cert-fingerprint"_hash:
+                case "server-cert-fingerprint-sha256"_hash:
+                    fingerprint = itemVal;
                     break;
                 default:
                     continue;
                 }
             }
 
-            anytlsConstruct(node, ANYTLS_DEFAULT_GROUP, remarks, server, port, password, host, udp, tfo, scv);
+            hysteria2Construct(node, HY2_DEFAULT_GROUP, remarks, server, port, password, host, obfs, obfsparam, up, down, port_hopping, port_hopping_interval, fingerprint, udp, tfo, scv);
             break;
         default:
             switch(hash_(remarks))
