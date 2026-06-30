@@ -111,6 +111,7 @@ struct Proxy
     String PortHopping;
     String PortHoppingInterval;
     String ServerFingerprint;
+    String UnderlyingProxy;
     tribool Reuse;
 };
 

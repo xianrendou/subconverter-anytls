@@ -506,6 +506,7 @@ int script_context_init(qjs::Context &context)
             .fun<&Proxy::PortHopping>("PortHopping")
             .fun<&Proxy::PortHoppingInterval>("PortHoppingInterval")
             .fun<&Proxy::ServerFingerprint>("ServerFingerprint")
+            .fun<&Proxy::UnderlyingProxy>("UnderlyingProxy")
             .fun<&Proxy::Reuse>("Reuse");
         context.global().add<&makeDataURI>("makeDataURI")
             .add<&qjs_fetch>("fetch")

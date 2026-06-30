@@ -1012,7 +1012,7 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
     std::string protocol, protoparam, obfs, obfsparam; //ssr, hysteria2
     std::string user; //socks
     std::string ip, ipv6, private_key, public_key, mtu; //wireguard
-    std::string up, down, port_hopping, port_hopping_interval, fingerprint; //hysteria2
+    std::string up, down, port_hopping, port_hopping_interval, fingerprint, underlying_proxy; //hysteria2, proxy chain
     string_array dns_server;
     tribool udp, tfo, scv;
     Node singleproxy;
@@ -1031,6 +1031,7 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
         udp = safe_as<std::string>(singleproxy["udp"]);
         tfo = safe_as<std::string>(singleproxy["fast-open"]);
         scv = safe_as<std::string>(singleproxy["skip-cert-verify"]);
+        underlying_proxy = safe_as<std::string>(singleproxy["dialer-proxy"]);
         switch(hash_(proxytype))
         {
         case "vmess"_hash:
@@ -1271,6 +1272,7 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes)
             continue;
         }
 
+        node.UnderlyingProxy = underlying_proxy;
         node.Id = index;
         nodes.emplace_back(std::move(node));
         index++;
@@ -1471,7 +1473,7 @@ bool explodeSurge(std::string surge, std::vector<Proxy> &nodes)
         std::string id, net, tls, host, edge, path; //v2
         std::string protocol, protoparam; //ssr
         std::string section, ip, ipv6, private_key, public_key, mtu, test_url, client_id, peer, keepalive; //wireguard
-        std::string obfs, obfsparam, up, down, port_hopping, port_hopping_interval, fingerprint, reuse; //hysteria2, anytls
+        std::string obfs, obfsparam, up, down, port_hopping, port_hopping_interval, fingerprint, reuse, underlying_proxy; //hysteria2, anytls, proxy chain
         string_array dns_servers;
         string_multimap wireguard_config;
         std::string version, aead = "1";
@@ -1488,6 +1490,14 @@ bool explodeSurge(std::string surge, std::vector<Proxy> &nodes)
         configs = split(config, ",");
         if(configs.size() < 3)
             continue;
+        underlying_proxy.clear();
+        for(i = 3; i < configs.size(); i++)
+        {
+            if(!parseKeyValue(configs[i], itemName, itemVal))
+                continue;
+            if(hash_(itemName) == "underlying-proxy"_hash)
+                underlying_proxy = itemVal;
+        }
         switch(hash_(configs[0]))
         {
         case "direct"_hash:
@@ -2259,6 +2269,7 @@ bool explodeSurge(std::string surge, std::vector<Proxy> &nodes)
             break;
         }
 
+        node.UnderlyingProxy = underlying_proxy;
         node.Id = index;
         nodes.emplace_back(std::move(node));
         index++;

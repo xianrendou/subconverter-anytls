@@ -508,6 +508,8 @@ void proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGr
             continue;
         }
 
+        if(!x.UnderlyingProxy.empty())
+            singleproxy["dialer-proxy"] = x.UnderlyingProxy;
         // UDP is not supported yet in clash using snell
         // sees in https://dreamacro.github.io/clash/configuration/outbound.html#snell
         if(udp && x.Type != ProxyType::Snell)
@@ -918,6 +920,8 @@ std::string proxyToSurge(std::vector<Proxy> &nodes, const std::string &base_conf
             proxy += ", tfo=" + tfo.get_str();
         if(!udp.is_undef())
             proxy += ", udp-relay=" + udp.get_str();
+        if(!x.UnderlyingProxy.empty())
+            proxy += ", underlying-proxy=" + x.UnderlyingProxy;
 
         if(ext.nodelist)
             output_nodelist += x.Remark + " = " + proxy + "\n";
